@@ -24,17 +24,20 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.intellica.panicshield.ui.AccessibilityStatus
+import com.intellica.panicshield.ui.BatteryOptimization
 
 @Composable
 fun HomeScreen(onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var enabled by remember { mutableStateOf(AccessibilityStatus.isEnabled(context)) }
+    var accessibilityEnabled by remember { mutableStateOf(AccessibilityStatus.isEnabled(context)) }
+    var batteryOk by remember { mutableStateOf(BatteryOptimization.isIgnoring(context)) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                enabled = AccessibilityStatus.isEnabled(context)
+                accessibilityEnabled = AccessibilityStatus.isEnabled(context)
+                batteryOk = BatteryOptimization.isIgnoring(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -48,17 +51,22 @@ fun HomeScreen(onOpenSettings: () -> Unit) {
     ) {
         Text("Panic Shield", style = MaterialTheme.typography.headlineLarge)
         Text(
-            if (enabled) "Active. Volume up x3 will lock."
+            if (accessibilityEnabled) "Active. Volume up x3 will lock."
             else "Inactive. Grant accessibility access.",
             style = MaterialTheme.typography.bodyLarge,
         )
-        if (!enabled) {
+        if (!accessibilityEnabled) {
             Button(onClick = {
                 context.startActivity(
                     Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }) { Text("Open Accessibility Settings") }
+        }
+        if (accessibilityEnabled && !batteryOk) {
+            Button(onClick = { BatteryOptimization.requestExemption(context) }) {
+                Text("Disable battery optimization")
+            }
         }
         TextButton(onClick = onOpenSettings) { Text("Settings") }
     }
