@@ -1,7 +1,5 @@
 package com.intellica.panicshield.service
 
-import java.util.ArrayDeque
-
 class PressTracker(
     private val requiredPresses: Int,
     private val windowMs: Long,
@@ -10,7 +8,7 @@ class PressTracker(
 
     fun record(timeMs: Long): Boolean {
         timestamps.addLast(timeMs)
-        while (timestamps.isNotEmpty() && timeMs - timestamps.peekFirst() > windowMs) {
+        while (timestamps.isNotEmpty() && timeMs - timestamps.first() > windowMs) {
             timestamps.removeFirst()
         }
         return if (timestamps.size >= requiredPresses) {
