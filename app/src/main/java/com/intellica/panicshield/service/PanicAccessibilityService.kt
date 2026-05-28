@@ -1,6 +1,7 @@
 package com.intellica.panicshield.service
 
 import android.accessibilityservice.AccessibilityService
+import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.intellica.panicshield.action.AccessibilityLockAction
@@ -14,6 +15,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 
+private const val TAG = "PanicAS"
+
 class PanicAccessibilityService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -26,22 +29,36 @@ class PanicAccessibilityService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "onCreate")
         settings = SettingsRepository(applicationContext)
         settings.config
             .onEach { config ->
+                Log.d(TAG, "config updated: $config")
                 currentConfig = config
                 tracker = PressTracker(config.pressCount, config.windowMs)
             }
             .launchIn(scope)
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.d(TAG, "onServiceConnected; serviceInfo=${serviceInfo?.flags}")
+    }
+
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        Log.d(
+            TAG,
+            "onKeyEvent action=${event.action} keyCode=${event.keyCode} repeat=${event.repeatCount} time=${event.eventTime}"
+        )
         if (!currentConfig.enabled) return false
         if (event.action != KeyEvent.ACTION_DOWN) return false
         if (event.keyCode != KeyEvent.KEYCODE_VOLUME_UP) return false
         if (event.repeatCount != 0) return false
 
-        if (tracker.record(event.eventTime)) {
+        val fired = tracker.record(event.eventTime)
+        Log.d(TAG, "tracker.record -> $fired")
+        if (fired) {
+            Log.d(TAG, "FIRING lockNow")
             buildLockAction().lockNow()
         }
         return false
@@ -51,6 +68,7 @@ class PanicAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy")
         scope.cancel()
         super.onDestroy()
     }
