@@ -4,10 +4,12 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,9 +72,15 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var cameraGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* result ignored; capture silently no-ops without permission */ }
+    ) { granted -> cameraGranted = granted }
 
     val permissionsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -182,6 +190,18 @@ fun SettingsScreen(
                         if (enabled) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     },
                 )
+            }
+            if (captureOn && !cameraGranted) {
+                Text(
+                    "Camera access is required to take the safety photo.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(
+                    onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Grant camera permission")
+                }
             }
             if (captureOn && !OverlayPermission.isGranted(context)) {
                 Text(
