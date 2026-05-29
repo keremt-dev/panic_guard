@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 
 private const val TAG = "PanicAS"
+private const val BLOCK_COOLDOWN_MS = 1200L
 
 class PanicAccessibilityService : AccessibilityService() {
 
@@ -42,6 +43,13 @@ class PanicAccessibilityService : AccessibilityService() {
     @Volatile private var panicActive: Boolean = false
     @Volatile private var protectedPackages: Set<String> = emptySet()
     @Volatile private var captureOnTrigger: Boolean = true
+
+    // Block debounce: a launching protected app emits a burst of window events;
+    // firing GLOBAL_ACTION_HOME on every one hammers the system and trips
+    // aggressive OEM watchdogs (HyperOS) into killing the service. One HOME per
+    // package per cooldown is enough to keep the app out.
+    private var lastBlockedPkg: String? = null
+    private var lastBlockAtMs: Long = 0L
 
     /**
      * Fires whenever the screen wakes or the keyguard is dismissed. While panic
@@ -140,15 +148,15 @@ class PanicAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString()
-        Log.d(
-            TAG,
-            "windowState pkg=$pkg panicActive=$panicActive protectedCount=${protectedPackages.size} inSet=${pkg in protectedPackages}"
-        )
         val blocker = BankBlocker(protectedPackages = protectedPackages, panicActive = panicActive)
-        if (blocker.shouldBlock(pkg)) {
-            Log.d(TAG, "blocking protected app: $pkg")
-            performGlobalAction(GLOBAL_ACTION_HOME)
-        }
+        if (!blocker.shouldBlock(pkg)) return
+
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (pkg == lastBlockedPkg && now - lastBlockAtMs < BLOCK_COOLDOWN_MS) return
+        lastBlockedPkg = pkg
+        lastBlockAtMs = now
+        Log.d(TAG, "blocking protected app: $pkg")
+        performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
     override fun onInterrupt() {}

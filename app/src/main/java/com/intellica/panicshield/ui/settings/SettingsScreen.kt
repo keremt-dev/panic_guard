@@ -270,8 +270,13 @@ private fun SafePinSection(panicViewModel: com.intellica.panicshield.ui.panic.Pa
 }
 
 private class PickPhoneNumberContract : ActivityResultContract<Unit, Uri?>() {
+    // Use the phone MIME type rather than a data URI. On some OEMs (HyperOS)
+    // ACTION_PICK with Phone.CONTENT_URI mis-resolves to the file manager;
+    // setting type=Phone.CONTENT_TYPE routes reliably to the contacts picker.
     override fun createIntent(context: Context, input: Unit): Intent =
-        Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+        Intent(Intent.ACTION_PICK).apply {
+            type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
+        }
 
     override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
         if (resultCode == Activity.RESULT_OK) intent?.data else null
