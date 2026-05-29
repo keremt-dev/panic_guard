@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -14,8 +16,6 @@ import androidx.annotation.OptIn
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
@@ -24,27 +24,31 @@ import androidx.lifecycle.LifecycleService
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import java.io.FileOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "FaceCapture"
 private const val NOTIF_ID = 4712
 private const val NOTIF_CHANNEL_ID = "panic_shield_capture"
-private const val WINDOW_MS = 12_000L
-// Since capture is now only triggered on screen-wake / unlock (a person is
-// present by definition), face detection is a best-effort nicety: if a face
-// is found before this deadline we snap immediately; otherwise we snap anyway
-// so we never miss the attacker just because ML Kit was slow to confirm a face.
-private const val FALLBACK_CAPTURE_MS = 2_500L
+private const val WINDOW_MS = 8_000L
+// Capture is only triggered on screen-wake / unlock, so a person is present
+// by definition. We grab a frame from the ImageAnalysis stream (which works
+// on devices where ImageCapture still-capture doesn't, e.g. emulator webcam):
+// if ML Kit confirms a face sooner we grab that frame; otherwise we grab one
+// after this delay regardless so we never miss the attacker.
+private const val FALLBACK_CAPTURE_MS = 1_800L
+private const val JPEG_QUALITY = 90
 
 /**
- * Foreground service (type=camera) that, for up to 5 seconds, watches the
- * FRONT camera for a human face. On the first frame with a face above the
- * confidence threshold it snaps a full-resolution still into app-private
- * storage, then stops. No PreviewView is bound — capture is invisible.
+ * Foreground service (type=camera) that grabs a single silent front-camera
+ * photo into app-private storage, then stops. No PreviewView is bound — the
+ * capture is invisible. Started by PanicAccessibilityService when the phone
+ * is woken / unlocked while panic is active.
  *
- * If no face appears within the window, nothing is saved (a photo of the
- * ceiling/pocket is useless).
+ * The photo comes from the ImageAnalysis frame stream (not ImageCapture),
+ * because the still-capture pipeline is unreliable on some camera providers
+ * (notably the emulator's host-webcam bridge) while the analysis stream works.
  */
 class FaceCaptureService : LifecycleService() {
 
@@ -52,8 +56,8 @@ class FaceCaptureService : LifecycleService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val captured = AtomicBoolean(false)
     private val started = AtomicBoolean(false)
+    private val captureRequested = AtomicBoolean(false)
     private var cameraProvider: ProcessCameraProvider? = null
-    private var imageCapture: ImageCapture? = null
 
     private val faceDetector by lazy {
         FaceDetection.getClient(
@@ -65,32 +69,29 @@ class FaceCaptureService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        // A rapid double-trigger (user pressing volume-up more than the
-        // required count) would start this twice and the second unbindAll()
-        // would tear down the first session's frame stream. Ignore re-entry.
         if (!started.compareAndSet(false, true)) {
             Log.d(TAG, "capture already running; ignoring duplicate start")
             return START_NOT_STICKY
         }
         ensureChannel()
-        // Android 14+ blocks starting a camera-type FGS from the background
-        // (anti-spyware). startForeground() then throws SecurityException
-        // INSIDE this callback, which would crash the whole process — taking
-        // down the AccessibilityService with it. Guard it and bail cleanly.
+        // Android 14+ throws SecurityException from startForeground(camera) when
+        // started from background without an exemption; that would crash the
+        // process (and the AccessibilityService with it). Guard + bail cleanly.
         if (!promoteToForeground()) {
             Log.w(TAG, "could not enter camera foreground; aborting capture")
             stopSelf(startId)
             return START_NOT_STICKY
         }
         startCamera()
-        // Best-effort fallback: if no face has been captured yet, snap anyway.
+        // After a short settle delay, request a capture even if no face was
+        // confirmed (a person is present on unlock).
         mainHandler.postDelayed({
             if (!captured.get()) {
-                Log.d(TAG, "fallback capture (no face confirmed in time)")
-                takePhoto()
+                Log.d(TAG, "requesting fallback capture")
+                captureRequested.set(true)
             }
         }, FALLBACK_CAPTURE_MS)
-        mainHandler.postDelayed({ finish("timeout") }, WINDOW_MS)
+        mainHandler.postDelayed({ if (!captured.get()) finish("timeout") }, WINDOW_MS)
         return START_NOT_STICKY
     }
 
@@ -106,8 +107,7 @@ class FaceCaptureService : LifecycleService() {
         )
     }
 
-    /** @return true if we successfully entered the foreground; false if the
-     *  OS rejected the camera FGS (e.g. background start on API 34+). */
+    /** @return true if foreground entry succeeded; false if the OS rejected it. */
     private fun promoteToForeground(): Boolean {
         val notif: Notification = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
             .setContentTitle("Panic Shield")
@@ -134,24 +134,12 @@ class FaceCaptureService : LifecycleService() {
             try {
                 val provider = future.get()
                 cameraProvider = provider
-
                 val analysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also { it.setAnalyzer(analysisExecutor, ::analyze) }
-
-                val capture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .build()
-                imageCapture = capture
-
                 provider.unbindAll()
-                provider.bindToLifecycle(
-                    this,
-                    CameraSelector.DEFAULT_FRONT_CAMERA,
-                    analysis,
-                    capture,
-                )
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
                 Log.d(TAG, "camera bound (front)")
             } catch (e: Exception) {
                 Log.e(TAG, "camera bind failed", e)
@@ -162,56 +150,63 @@ class FaceCaptureService : LifecycleService() {
 
     @OptIn(ExperimentalGetImage::class)
     private fun analyze(proxy: ImageProxy) {
-        val mediaImage = proxy.image
-        Log.d(TAG, "analyze() called; image=${if (mediaImage == null) "null" else "ok"} captured=${captured.get()}")
-        if (mediaImage == null || captured.get()) {
-            proxy.close()
-            return
-        }
-        val rotation = proxy.imageInfo.rotationDegrees
-        val input = InputImage.fromMediaImage(mediaImage, rotation)
-        faceDetector.process(input)
-            .addOnSuccessListener { faces ->
-                Log.d(TAG, "frame ${input.width}x${input.height} rot=$rotation faces=${faces.size}")
-                if (faces.isNotEmpty() && !captured.get()) {
-                    Log.d(TAG, "face detected (${faces.size}); capturing")
-                    takePhoto()
-                }
+        try {
+            if (captured.get()) return
+
+            // Time to capture (fallback fired or a face was confirmed): save
+            // this frame synchronously from the analysis stream.
+            if (captureRequested.get()) {
+                saveAndFinish(proxy)
+                return
             }
-            .addOnFailureListener { Log.e(TAG, "face process failed", it) }
-            .addOnCompleteListener { proxy.close() }
+
+            // Otherwise run best-effort face detection; a positive hit makes us
+            // capture the NEXT frame sooner than the fallback timer.
+            val mediaImage = proxy.image ?: return
+            val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
+            // process() is async and keeps the underlying image, so we must NOT
+            // close the proxy until it completes — done in the lambda below.
+            val pending = proxy
+            faceDetector.process(input)
+                .addOnSuccessListener { faces ->
+                    if (faces.isNotEmpty()) {
+                        Log.d(TAG, "face detected (${faces.size}); will capture next frame")
+                        captureRequested.set(true)
+                    }
+                }
+                .addOnFailureListener { Log.e(TAG, "face process failed", it) }
+                .addOnCompleteListener { pending.close() }
+            return  // proxy closed in the completion lambda
+        } catch (e: Exception) {
+            Log.e(TAG, "analyze error", e)
+        }
+        proxy.close()
     }
 
-    private fun takePhoto() {
+    private fun saveAndFinish(proxy: ImageProxy) {
         if (!captured.compareAndSet(false, true)) return
-        val capture = imageCapture ?: return finish("no-capture-usecase")
-        val now = System.currentTimeMillis()
-        val file = CaptureStorage.newFile(filesDir, now)
-        val options = ImageCapture.OutputFileOptions.Builder(file).build()
-        capture.takePicture(
-            options,
-            analysisExecutor,
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onImageSaved(result: ImageCapture.OutputFileResults) {
-                    Log.d(TAG, "saved: ${file.absolutePath}")
-                    finish("captured")
-                }
+        try {
+            val rotated = rotate(proxy.toBitmap(), proxy.imageInfo.rotationDegrees)
+            val file = CaptureStorage.newFile(filesDir, System.currentTimeMillis())
+            FileOutputStream(file).use { rotated.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+            Log.d(TAG, "saved: ${file.absolutePath} (${rotated.width}x${rotated.height})")
+            finish("captured")
+        } catch (e: Exception) {
+            Log.e(TAG, "save failed", e)
+            finish("save-error")
+        }
+    }
 
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "capture error", exc)
-                    finish("capture-error")
-                }
-            },
-        )
+    private fun rotate(bmp: Bitmap, degrees: Int): Bitmap {
+        if (degrees == 0) return bmp
+        val m = Matrix().apply { postRotate(degrees.toFloat()) }
+        return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
     }
 
     private fun finish(reason: String) {
         mainHandler.post {
             Log.d(TAG, "finish: $reason")
-            try {
-                cameraProvider?.unbindAll()
-            } catch (_: Exception) {
-            }
+            runCatching { cameraProvider?.unbindAll() }
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
