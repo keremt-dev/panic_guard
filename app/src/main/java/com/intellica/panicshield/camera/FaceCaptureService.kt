@@ -162,6 +162,7 @@ class FaceCaptureService : LifecycleService() {
 
             // Otherwise run best-effort face detection; a positive hit makes us
             // capture the NEXT frame sooner than the fallback timer.
+            // (No per-frame logging here — it fires ~30x/sec.)
             val mediaImage = proxy.image ?: return
             val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
             // process() is async and keeps the underlying image, so we must NOT
