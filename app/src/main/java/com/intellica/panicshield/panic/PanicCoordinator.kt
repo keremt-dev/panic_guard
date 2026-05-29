@@ -6,7 +6,6 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.intellica.panicshield.action.AccessibilityLockAction
-import com.intellica.panicshield.camera.FaceCaptureService
 import com.intellica.panicshield.settings.SettingsRepository
 import com.intellica.panicshield.settings.TriggerConfig
 import com.intellica.panicshield.sms.SosSmsReactor
@@ -39,17 +38,12 @@ class PanicCoordinator(
         // 1. Mark panic ACTIVE (durable flag observed by BankBlocker + UI)
         scope.launch { stateRepo.activate(now = SystemClock.elapsedRealtime()) }
 
-        // 2. Start the silent face capture FIRST, while the screen is still
-        //    on, so CameraX can bind the front camera before the lock. The
-        //    foreground service survives the subsequent screen lock and keeps
-        //    watching for a face for its 5s window.
-        scope.launch {
-            if (settingsRepo.captureOnTrigger.first()) {
-                startService(FaceCaptureService.startIntent(appContext))
-            } else {
-                Log.d(TAG, "capture disabled; skipping camera")
-            }
-        }
+        // 2. Camera capture is NOT started here. At panic-fire time the person
+        //    in front of the camera is the victim, and the screen is about to
+        //    lock (emulator/host webcam also stops feeding frames when off).
+        //    Instead, PanicAccessibilityService arms a screen-on/unlock
+        //    listener that captures whoever wakes or unlocks the phone while
+        //    panic stays active — that's when the attacker's face is present.
 
         // 3. SOS SMS (only if a contact has been chosen)
         scope.launch {

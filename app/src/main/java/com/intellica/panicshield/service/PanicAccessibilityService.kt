@@ -1,11 +1,17 @@
 package com.intellica.panicshield.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.intellica.panicshield.block.BankBlocker
 import com.intellica.panicshield.block.ProtectedAppsRepository
+import com.intellica.panicshield.camera.FaceCaptureService
 import com.intellica.panicshield.panic.PanicCoordinator
 import com.intellica.panicshield.panic.PanicState
 import com.intellica.panicshield.panic.PanicStateRepository
@@ -35,6 +41,21 @@ class PanicAccessibilityService : AccessibilityService() {
     // Mirrored from flows so onAccessibilityEvent (hot path) stays allocation-free.
     @Volatile private var panicActive: Boolean = false
     @Volatile private var protectedPackages: Set<String> = emptySet()
+    @Volatile private var captureOnTrigger: Boolean = true
+
+    /**
+     * Fires whenever the screen wakes or the keyguard is dismissed. While panic
+     * is active this is exactly when the attacker's face is in front of the
+     * phone, so we trigger the silent capture here (not at panic-fire time,
+     * when the victim is the one looking at the screen).
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (!panicActive || !captureOnTrigger) return
+            Log.d(TAG, "screen event ${intent.action} while panic active -> capture")
+            startCapture()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -63,6 +84,37 @@ class PanicAccessibilityService : AccessibilityService() {
         protectedApps.protectedPackages
             .onEach { protectedPackages = it }
             .launchIn(scope)
+
+        settings.captureOnTrigger
+            .onEach { captureOnTrigger = it }
+            .launchIn(scope)
+
+        registerScreenReceiver()
+    }
+
+    private fun registerScreenReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenReceiver, filter)
+        }
+    }
+
+    private fun startCapture() {
+        val intent = FaceCaptureService.startIntent(applicationContext)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                applicationContext.startForegroundService(intent)
+            } else {
+                applicationContext.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to start capture", e)
+        }
     }
 
     override fun onServiceConnected() {
@@ -103,6 +155,7 @@ class PanicAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
+        runCatching { unregisterReceiver(screenReceiver) }
         scope.cancel()
         super.onDestroy()
     }
