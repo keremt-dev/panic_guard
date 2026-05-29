@@ -239,6 +239,24 @@ fun SettingsScreen(
             HorizontalDivider()
 
             SafePinSection()
+
+            HorizontalDivider()
+
+            Text("Reliability", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Some phones (Xiaomi/HyperOS, Huawei, Oppo, Samsung) suspend background " +
+                    "apps and can silently disable the panic trigger. To keep it working:\n" +
+                    "• Allow Autostart\n" +
+                    "• Set battery usage to \"No restrictions\"\n" +
+                    "• Lock the app in Recents",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { com.intellica.panicshield.ui.AppSettings.openAppInfo(context) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Open app settings")
+            }
         }
     }
 }
