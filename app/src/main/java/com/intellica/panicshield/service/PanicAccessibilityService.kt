@@ -4,8 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
-import com.intellica.panicshield.action.AccessibilityLockAction
-import com.intellica.panicshield.action.LockAction
+import com.intellica.panicshield.panic.PanicCoordinator
+import com.intellica.panicshield.panic.PanicStateRepository
 import com.intellica.panicshield.settings.SettingsRepository
 import com.intellica.panicshield.settings.TriggerConfig
 import kotlinx.coroutines.CoroutineScope
@@ -21,6 +21,7 @@ class PanicAccessibilityService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var settings: SettingsRepository
+    private lateinit var coordinator: PanicCoordinator
     private var tracker: PressTracker = PressTracker(
         TriggerConfig.DEFAULT.pressCount,
         TriggerConfig.DEFAULT.windowMs,
@@ -31,6 +32,10 @@ class PanicAccessibilityService : AccessibilityService() {
         super.onCreate()
         Log.d(TAG, "onCreate")
         settings = SettingsRepository(applicationContext)
+        coordinator = PanicCoordinator(
+            service = this,
+            stateRepo = PanicStateRepository(applicationContext),
+        )
         settings.config
             .onEach { config ->
                 Log.d(TAG, "config updated: $config")
@@ -58,8 +63,8 @@ class PanicAccessibilityService : AccessibilityService() {
         val fired = tracker.record(event.eventTime)
         Log.d(TAG, "tracker.record -> $fired")
         if (fired) {
-            Log.d(TAG, "FIRING lockNow")
-            buildLockAction().lockNow()
+            Log.d(TAG, "FIRING coordinator")
+            coordinator.fire(currentConfig)
         }
         return false
     }
@@ -72,7 +77,4 @@ class PanicAccessibilityService : AccessibilityService() {
         scope.cancel()
         super.onDestroy()
     }
-
-    private fun buildLockAction(): LockAction =
-        AccessibilityLockAction(service = this, vibrate = currentConfig.vibrate)
 }
