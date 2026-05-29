@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panic Shield — Privacy Policy</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0E0F13; color: #ECECEC;
+    font: 16px/1.65 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 22px 80px; }
+  .badge { display:inline-block; padding:4px 12px; border:1px solid #2A2D37;
+    border-radius:999px; color:#34D399; font-size:13px; letter-spacing:.5px; }
+  h1 { font-size: 30px; margin: 18px 0 4px; letter-spacing:1px; }
+  h2 { font-size: 19px; margin: 34px 0 8px; color:#F2F3F5; }
+  .muted { color:#9A9DA8; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:14.5px; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid #20232B; vertical-align:top; }
+  th { color:#C7CAD1; font-weight:600; }
+  code { background:#181A21; padding:1px 6px; border-radius:5px; font-size:13px; }
+  a { color:#F2424B; }
+  .rule { height:1px; background:#20232B; border:0; margin:30px 0; }
+  footer { color:#6f727b; font-size:13px; margin-top:40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">No internet · No backend · No tracking</span>
+  <h1>Panic Shield — Privacy Policy</h1>
+  <p class="muted">Last updated: 29 May 2026</p>
+
+  <p>Panic Shield is an Android personal-safety app. Pressing Volume Up three
+  times locks your screen and runs the safeguards you've enabled: alerting an
+  emergency contact, capturing a photo of whoever next wakes/unlocks the phone,
+  and blocking the apps you marked as protected until you disarm with your safe
+  PIN.</p>
+
+  <h2>Summary</h2>
+  <ul>
+    <li><b>No accounts. No backend. No internet.</b> Panic Shield has no
+      <code>INTERNET</code> permission — it cannot and does not upload anything
+      to us or any server.</li>
+    <li><b>We never collect, receive, or access your data.</b> Everything the app
+      stores stays on your device.</li>
+    <li>The only data that ever leaves your device is an <b>SMS you trigger
+      yourself</b>, sent through your carrier to the contact <b>you</b> chose.</li>
+  </ul>
+
+  <h2>What the app handles, and where it stays</h2>
+  <table>
+    <tr><th>Data</th><th>Where it goes</th></tr>
+    <tr><td>Photos (front camera)</td><td>App-private storage only. Never uploaded. View/delete in-app; removed on uninstall.</td></tr>
+    <tr><td>Location</td><td>Read once at panic time; placed as a map link in the SOS SMS to your chosen contact. Not stored, not sent to us.</td></tr>
+    <tr><td>Emergency contact (name + number)</td><td>Stored only on your device; used solely to address the SOS SMS.</td></tr>
+    <tr><td>Safe PIN</td><td>Stored only as a salted PBKDF2 hash on your device. Never transmitted.</td></tr>
+    <tr><td>Protected-apps list & settings</td><td>Stored only on your device.</td></tr>
+  </table>
+  <p class="muted">There is no analytics SDK, no crash reporter, and no advertising in Panic Shield.</p>
+
+  <h2>Permissions</h2>
+  <table>
+    <tr><th>Permission</th><th>Purpose</th></tr>
+    <tr><td>Accessibility Service</td><td>Detect the Volume-Up trigger in the background, lock the screen, and bounce protected apps to home during panic. Does not read or transmit on-screen content.</td></tr>
+    <tr><td>Camera</td><td>Take the silent safety photo on unlock. Photos stay on the device.</td></tr>
+    <tr><td>Send SMS</td><td>Send the SOS message to your chosen contact at panic time.</td></tr>
+    <tr><td>Location</td><td>Include your location in the SOS SMS (read only at trigger).</td></tr>
+    <tr><td>Read Contacts</td><td>Only for the system contact picker when choosing an emergency contact.</td></tr>
+    <tr><td>Query all packages</td><td>Let you pick which installed apps to protect. The list never leaves the device.</td></tr>
+    <tr><td>Display over other apps</td><td>Background-start exemption needed to begin the photo capture when the phone is woken while locked.</td></tr>
+    <tr><td>Notifications, Vibrate, Ignore battery optimizations</td><td>Foreground-service notice, haptic confirmation, and trigger reliability.</td></tr>
+  </table>
+
+  <h2>Data sharing</h2>
+  <p>We do not share your data with anyone, because we never receive it. The SOS
+  SMS is sent by your device to the recipient you selected; its delivery is
+  handled by your mobile carrier under their terms.</p>
+
+  <h2>Data deletion</h2>
+  <p>All app data is stored locally. Uninstalling Panic Shield deletes it,
+  including captured photos, your safe-PIN hash, protected-apps list, and
+  emergency contact. Captured photos can also be deleted individually in the app.</p>
+
+  <h2>Children</h2>
+  <p>Panic Shield is not directed at children under 13 and collects no information
+  from anyone.</p>
+
+  <h2>Changes</h2>
+  <p>If a future version changes how data is handled, this policy will be updated
+  and the in-app onboarding will explain the change before any new behavior is
+  enabled.</p>
+
+  <h2>Contact</h2>
+  <p><a href="mailto:kerem.turkyilmaz@intellica.net">kerem.turkyilmaz@intellica.net</a></p>
+
+  <footer>Panic Shield · Android personal-safety utility ·
+    <a href="https://github.com/keremt-dev/panic_guard">source</a></footer>
+</div>
+</body>
+</html>
