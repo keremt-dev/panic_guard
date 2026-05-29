@@ -1,10 +1,28 @@
 package com.intellica.panicshield.ui.settings
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -14,11 +32,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.intellica.panicshield.settings.TriggerConfig
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +48,36 @@ fun SettingsScreen(
     onBack: () -> Unit,
 ) {
     val config by viewModel.config.collectAsState()
+    val emergency by viewModel.emergencyContact.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* result ignored; user can re-tap "Pick contact" to retry */ }
+
+    val pickContact = rememberLauncherForActivityResult(PickPhoneNumberContract()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = viewModel.saveContactFromUri(context.contentResolver, uri)
+            if (!ok) {
+                Toast.makeText(
+                    context,
+                    "Couldn't read that contact's phone number.",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return@launch
+            }
+            val needed = buildList {
+                add(Manifest.permission.SEND_SMS)
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }.toTypedArray()
+            permissionsLauncher.launch(needed)
+        }
+    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -35,9 +86,14 @@ fun SettingsScreen(
         )
     }) { inner ->
         Column(
-            modifier = Modifier.padding(inner).padding(24.dp),
+            modifier = Modifier
+                .padding(inner)
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
+            Text("Trigger", style = MaterialTheme.typography.titleMedium)
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Enabled", modifier = Modifier.weight(1f))
                 Switch(checked = config.enabled, onCheckedChange = viewModel::setEnabled)
@@ -63,6 +119,36 @@ fun SettingsScreen(
                 Text("Vibrate on trigger", modifier = Modifier.weight(1f))
                 Switch(checked = config.vibrate, onCheckedChange = viewModel::setVibrate)
             }
+
+            HorizontalDivider()
+
+            Text("Emergency contact", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = emergency?.let { "${it.displayName}  •  ${it.phoneE164}" }
+                    ?: "No contact set. SMS will be skipped on trigger.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(onClick = { pickContact.launch(Unit) }) {
+                    Text(if (emergency == null) "Pick contact" else "Change")
+                }
+                if (emergency != null) {
+                    OutlinedButton(onClick = { viewModel.clearEmergencyContact() }) {
+                        Text("Remove")
+                    }
+                }
+            }
         }
     }
+}
+
+private class PickPhoneNumberContract : ActivityResultContract<Unit, Uri?>() {
+    override fun createIntent(context: Context, input: Unit): Intent =
+        Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
+        if (resultCode == Activity.RESULT_OK) intent?.data else null
 }

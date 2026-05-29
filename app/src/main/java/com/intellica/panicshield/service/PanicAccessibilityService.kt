@@ -34,6 +34,7 @@ class PanicAccessibilityService : AccessibilityService() {
         settings = SettingsRepository(applicationContext)
         coordinator = PanicCoordinator(
             service = this,
+            settingsRepo = settings,
             stateRepo = PanicStateRepository(applicationContext),
         )
         settings.config
