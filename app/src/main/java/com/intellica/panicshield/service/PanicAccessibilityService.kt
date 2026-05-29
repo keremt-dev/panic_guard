@@ -88,6 +88,10 @@ class PanicAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString()
+        Log.d(
+            TAG,
+            "windowState pkg=$pkg panicActive=$panicActive protectedCount=${protectedPackages.size} inSet=${pkg in protectedPackages}"
+        )
         val blocker = BankBlocker(protectedPackages = protectedPackages, panicActive = panicActive)
         if (blocker.shouldBlock(pkg)) {
             Log.d(TAG, "blocking protected app: $pkg")
