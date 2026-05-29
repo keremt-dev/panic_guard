@@ -32,6 +32,9 @@ class SettingsRepository(private val context: Context) {
         if (name != null && phone != null) EmergencyContact(name, phone) else null
     }
 
+    /** Reactor toggle: snap a silent front-camera photo on trigger. Default on. */
+    val captureOnTrigger: Flow<Boolean> = context.dataStore.data.map { it[CAPTURE_ON_TRIGGER] ?: true }
+
     suspend fun update(transform: (TriggerConfig) -> TriggerConfig) {
         context.dataStore.edit { prefs ->
             val current = TriggerConfig(
@@ -50,6 +53,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun markOnboardingDone() {
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
+    }
+
+    suspend fun setCaptureOnTrigger(value: Boolean) {
+        context.dataStore.edit { it[CAPTURE_ON_TRIGGER] = value }
     }
 
     suspend fun setEmergencyContact(contact: EmergencyContact?) {
@@ -72,5 +79,6 @@ class SettingsRepository(private val context: Context) {
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val EMERGENCY_CONTACT_NAME = stringPreferencesKey("emergency_contact_name")
         val EMERGENCY_CONTACT_E164 = stringPreferencesKey("emergency_contact_e164")
+        val CAPTURE_ON_TRIGGER = booleanPreferencesKey("capture_on_trigger")
     }
 }

@@ -37,8 +37,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.intellica.panicshield.settings.TriggerConfig
+import com.intellica.panicshield.ui.photos.CapturedPhotosScreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,10 +51,21 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
     onBack: () -> Unit,
 ) {
+    var showPhotos by remember { mutableStateOf(false) }
+    if (showPhotos) {
+        CapturedPhotosScreen(viewModel = viewModel, onBack = { showPhotos = false })
+        return
+    }
+
     val config by viewModel.config.collectAsState()
     val emergency by viewModel.emergencyContact.collectAsState()
+    val captureOn by viewModel.captureOnTrigger.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* result ignored; capture silently no-ops without permission */ }
 
     val permissionsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -140,6 +155,32 @@ fun SettingsScreen(
                         Text("Remove")
                     }
                 }
+            }
+
+            HorizontalDivider()
+
+            Text("Camera", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Capture photo on trigger")
+                    Text(
+                        "Silently photographs whoever is in front of the phone, stored only on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(
+                    checked = captureOn,
+                    onCheckedChange = { enabled ->
+                        viewModel.setCaptureOnTrigger(enabled)
+                        if (enabled) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                )
+            }
+            OutlinedButton(
+                onClick = { showPhotos = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Captured photos")
             }
         }
     }

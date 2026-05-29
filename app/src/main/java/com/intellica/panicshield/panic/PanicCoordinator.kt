@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.intellica.panicshield.action.AccessibilityLockAction
+import com.intellica.panicshield.camera.FaceCaptureService
 import com.intellica.panicshield.settings.SettingsRepository
 import com.intellica.panicshield.settings.TriggerConfig
 import com.intellica.panicshield.sms.SosSmsReactor
@@ -35,11 +36,20 @@ class PanicCoordinator(
     fun fire(config: TriggerConfig) {
         Log.d(TAG, "fire()")
 
-        // 1. Mark panic ACTIVE
+        // 1. Mark panic ACTIVE (durable flag observed by BankBlocker + UI)
         scope.launch { stateRepo.activate(now = SystemClock.elapsedRealtime()) }
 
-        // 2. Lock the screen
-        AccessibilityLockAction(service = service, vibrate = config.vibrate).lockNow()
+        // 2. Start the silent face capture FIRST, while the screen is still
+        //    on, so CameraX can bind the front camera before the lock. The
+        //    foreground service survives the subsequent screen lock and keeps
+        //    watching for a face for its 5s window.
+        scope.launch {
+            if (settingsRepo.captureOnTrigger.first()) {
+                startService(FaceCaptureService.startIntent(appContext))
+            } else {
+                Log.d(TAG, "capture disabled; skipping camera")
+            }
+        }
 
         // 3. SOS SMS (only if a contact has been chosen)
         scope.launch {
@@ -48,18 +58,30 @@ class PanicCoordinator(
                 Log.d(TAG, "no emergency contact set; skipping SMS")
                 return@launch
             }
-            val intent = SosSmsReactor.startIntent(appContext, contact)
+            startService(SosSmsReactor.startIntent(appContext, contact))
+        }
+
+        // 4. Lock the screen last, after reactors are dispatched.
+        AccessibilityLockAction(service = service, vibrate = config.vibrate).lockNow()
+
+        // 5. Future reactors:
+        //    - LockdownHack.fire()  (Task 19)
+        //    - BankBlocker is event-driven, just observes state (Task 18)
+    }
+
+    private fun startService(intent: android.content.Intent) {
+        try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 appContext.startForegroundService(intent)
             } else {
                 appContext.startService(intent)
             }
+        } catch (e: Exception) {
+            // Android 12+ can throw ForegroundServiceStartNotAllowedException
+            // for camera/location FGS started from background on some OEMs.
+            // Accessibility services are generally exempt, but log defensively.
+            Log.e(TAG, "failed to start ${intent.component?.shortClassName}", e)
         }
-
-        // 4. Future reactors:
-        //    - LockdownHack.fire()       (Task 19)
-        //    - FaceCaptureService start  (Task 17)
-        //    - BankBlocker is event-driven, just observes state (Task 18)
     }
 
     private companion object {

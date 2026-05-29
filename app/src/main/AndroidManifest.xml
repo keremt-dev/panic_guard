@@ -10,7 +10,13 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-feature
+        android:name="android.hardware.camera.front"
+        android:required="false" />
 
     <application
         android:name=".PanicApp"
@@ -51,6 +57,11 @@
             android:name=".sms.SosSmsReactor"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <service
+            android:name=".camera.FaceCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
     </application>
 
 </manifest>

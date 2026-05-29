@@ -5,13 +5,17 @@ import android.content.ContentResolver
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.intellica.panicshield.camera.CaptureStorage
+import com.intellica.panicshield.camera.CapturedPhoto
 import com.intellica.panicshield.settings.SettingsRepository
 import com.intellica.panicshield.settings.TriggerConfig
 import com.intellica.panicshield.sms.ContactResolver
 import com.intellica.panicshield.sms.EmergencyContact
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,6 +35,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         started = SharingStarted.Eagerly,
         initialValue = null,
     )
+
+    val captureOnTrigger: StateFlow<Boolean> = repo.captureOnTrigger.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true,
+    )
+
+    private val filesDir = application.filesDir
+    private val _photos = MutableStateFlow<List<CapturedPhoto>>(emptyList())
+    val photos: StateFlow<List<CapturedPhoto>> = _photos.asStateFlow()
+
+    fun setCaptureOnTrigger(value: Boolean) {
+        viewModelScope.launch { repo.setCaptureOnTrigger(value) }
+    }
+
+    fun refreshPhotos() {
+        viewModelScope.launch {
+            _photos.value = withContext(Dispatchers.IO) { CaptureStorage.list(filesDir) }
+        }
+    }
+
+    fun deletePhoto(photo: CapturedPhoto) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { photo.file.delete() }
+            refreshPhotos()
+        }
+    }
 
     fun setEnabled(value: Boolean) = update { it.copy(enabled = value) }
     fun setPressCount(value: Int) = update { it.copy(pressCount = value) }
