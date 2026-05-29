@@ -35,6 +35,9 @@ class SettingsRepository(private val context: Context) {
     /** Reactor toggle: snap a silent front-camera photo on trigger. Default on. */
     val captureOnTrigger: Flow<Boolean> = context.dataStore.data.map { it[CAPTURE_ON_TRIGGER] ?: true }
 
+    /** PBKDF2 hash of the safe PIN (null if the user hasn't set one yet). */
+    val safePinHash: Flow<String?> = context.dataStore.data.map { it[SAFE_PIN_HASH] }
+
     suspend fun update(transform: (TriggerConfig) -> TriggerConfig) {
         context.dataStore.edit { prefs ->
             val current = TriggerConfig(
@@ -59,6 +62,12 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[CAPTURE_ON_TRIGGER] = value }
     }
 
+    suspend fun setSafePinHash(hash: String?) {
+        context.dataStore.edit {
+            if (hash == null) it.remove(SAFE_PIN_HASH) else it[SAFE_PIN_HASH] = hash
+        }
+    }
+
     suspend fun setEmergencyContact(contact: EmergencyContact?) {
         context.dataStore.edit { prefs ->
             if (contact == null) {
@@ -80,5 +89,6 @@ class SettingsRepository(private val context: Context) {
         val EMERGENCY_CONTACT_NAME = stringPreferencesKey("emergency_contact_name")
         val EMERGENCY_CONTACT_E164 = stringPreferencesKey("emergency_contact_e164")
         val CAPTURE_ON_TRIGGER = booleanPreferencesKey("capture_on_trigger")
+        val SAFE_PIN_HASH = stringPreferencesKey("safe_pin_hash")
     }
 }

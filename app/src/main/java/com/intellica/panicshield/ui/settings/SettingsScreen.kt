@@ -215,6 +215,56 @@ fun SettingsScreen(
             ) {
                 Text("Manage protected apps")
             }
+
+            HorizontalDivider()
+
+            SafePinSection()
+        }
+    }
+}
+
+@Composable
+private fun SafePinSection(panicViewModel: com.intellica.panicshield.ui.panic.PanicViewModel = viewModel()) {
+    val hasPin by panicViewModel.hasSafePin.collectAsState()
+    var entering by remember { mutableStateOf(false) }
+    var pin by remember { mutableStateOf("") }
+
+    Text("Safe PIN", style = MaterialTheme.typography.titleMedium)
+    Text(
+        if (hasPin) "A safe PIN is set. It's required to disarm panic mode."
+        else "Set a PIN required to disarm panic mode. Without it, anyone can disarm.",
+        style = MaterialTheme.typography.bodySmall,
+    )
+
+    if (entering) {
+        androidx.compose.material3.OutlinedTextField(
+            value = pin,
+            onValueChange = { pin = it.filter(Char::isDigit).take(8) },
+            label = { Text("New PIN (4-8 digits)") },
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+            ),
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                enabled = pin.length >= 4,
+                onClick = {
+                    panicViewModel.setSafePin(pin)
+                    pin = ""
+                    entering = false
+                },
+            ) { Text("Save PIN") }
+            OutlinedButton(onClick = { pin = ""; entering = false }) { Text("Cancel") }
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { entering = true }) {
+                Text(if (hasPin) "Change PIN" else "Set PIN")
+            }
+            if (hasPin) {
+                OutlinedButton(onClick = { panicViewModel.clearSafePin() }) { Text("Remove") }
+            }
         }
     }
 }
