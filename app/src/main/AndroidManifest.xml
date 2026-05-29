@@ -86,6 +86,14 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <receiver
+            android:name=".TriggerReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.intellica.panicshield.action.TRIGGER" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".sms.SosSmsReactor"
             android:exported="false"
