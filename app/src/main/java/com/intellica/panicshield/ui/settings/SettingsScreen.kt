@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.intellica.panicshield.settings.TriggerConfig
+import com.intellica.panicshield.ui.OverlayPermission
 import com.intellica.panicshield.ui.photos.CapturedPhotosScreen
 import com.intellica.panicshield.ui.protected.ProtectedAppsScreen
 import kotlinx.coroutines.launch
@@ -181,6 +182,18 @@ fun SettingsScreen(
                         if (enabled) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     },
                 )
+            }
+            if (captureOn && !OverlayPermission.isGranted(context)) {
+                Text(
+                    "For capture to work when the phone is locked or another app is open, allow \"Display over other apps\".",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(
+                    onClick = { OverlayPermission.request(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Allow display over other apps")
+                }
             }
             OutlinedButton(
                 onClick = { showPhotos = true },

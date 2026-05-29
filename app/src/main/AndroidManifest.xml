@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Grants a background foreground-service-start exemption so the silent
+         camera capture can run even when triggered from another app / locked
+         screen (Android 12+ restricts background FGS starts otherwise). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Needed so the user can pick which installed apps to gate during a panic
          event. Play justification: user-driven selection of sensitive apps. -->
     <uses-permission
