@@ -19,6 +19,7 @@ walls off your sensitive apps until you enter a safe PIN.
 | Feature | Behavior |
 |---|---|
 | ⚡ **Instant lock** | Volume Up ×3 (count + time window configurable) locks the screen via the Accessibility Service. |
+| 🤝 **More triggers** | Optional shake-to-trigger, a launcher "Panic" shortcut, a `panicshield://trigger` deep link, and a broadcast entry point for Tasker/MacroDroid (fires even while locked). |
 | 📍 **SOS SMS** | On trigger, sends a fixed safety message + a Google Maps location link to your chosen emergency contact. |
 | 📷 **Silent capture** | When someone wakes/unlocks the phone *while panic is active*, the front camera quietly saves a photo to app-private storage. |
 | 🔒 **Protected apps** | While panic is active, opening a protected app (banking, gallery, messengers…) bounces it straight back to the home screen. |

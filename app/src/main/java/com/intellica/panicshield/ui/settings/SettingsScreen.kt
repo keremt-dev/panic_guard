@@ -159,7 +159,7 @@ fun SettingsScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Shake the phone to fire panic")
                     Text(
-                        "Works while the screen is on. Higher sensitivity may cause accidental triggers in a pocket or bag.",
+                        "Works while the screen is on, and on many phones while it's off too (not guaranteed on every device). Higher sensitivity may cause accidental triggers in a pocket or bag.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
