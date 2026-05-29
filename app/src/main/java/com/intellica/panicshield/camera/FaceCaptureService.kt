@@ -30,8 +30,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val TAG = "FaceCapture"
 private const val NOTIF_ID = 4712
 private const val NOTIF_CHANNEL_ID = "panic_shield_capture"
-private const val WINDOW_MS = 5_000L
-private const val MIN_FACE_CONFIDENCE = 0.7f
+private const val WINDOW_MS = 12_000L
+// Since capture is now only triggered on screen-wake / unlock (a person is
+// present by definition), face detection is a best-effort nicety: if a face
+// is found before this deadline we snap immediately; otherwise we snap anyway
+// so we never miss the attacker just because ML Kit was slow to confirm a face.
+private const val FALLBACK_CAPTURE_MS = 2_500L
 
 /**
  * Foreground service (type=camera) that, for up to 5 seconds, watches the
@@ -79,6 +83,13 @@ class FaceCaptureService : LifecycleService() {
             return START_NOT_STICKY
         }
         startCamera()
+        // Best-effort fallback: if no face has been captured yet, snap anyway.
+        mainHandler.postDelayed({
+            if (!captured.get()) {
+                Log.d(TAG, "fallback capture (no face confirmed in time)")
+                takePhoto()
+            }
+        }, FALLBACK_CAPTURE_MS)
         mainHandler.postDelayed({ finish("timeout") }, WINDOW_MS)
         return START_NOT_STICKY
     }
