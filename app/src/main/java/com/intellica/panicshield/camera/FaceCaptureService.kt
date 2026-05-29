@@ -47,6 +47,7 @@ class FaceCaptureService : LifecycleService() {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val captured = AtomicBoolean(false)
+    private val started = AtomicBoolean(false)
     private var cameraProvider: ProcessCameraProvider? = null
     private var imageCapture: ImageCapture? = null
 
@@ -60,6 +61,13 @@ class FaceCaptureService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        // A rapid double-trigger (user pressing volume-up more than the
+        // required count) would start this twice and the second unbindAll()
+        // would tear down the first session's frame stream. Ignore re-entry.
+        if (!started.compareAndSet(false, true)) {
+            Log.d(TAG, "capture already running; ignoring duplicate start")
+            return START_NOT_STICKY
+        }
         ensureChannel()
         // Android 14+ blocks starting a camera-type FGS from the background
         // (anti-spyware). startForeground() then throws SecurityException
@@ -144,6 +152,7 @@ class FaceCaptureService : LifecycleService() {
     @OptIn(ExperimentalGetImage::class)
     private fun analyze(proxy: ImageProxy) {
         val mediaImage = proxy.image
+        Log.d(TAG, "analyze() called; image=${if (mediaImage == null) "null" else "ok"} captured=${captured.get()}")
         if (mediaImage == null || captured.get()) {
             proxy.close()
             return
