@@ -2,4 +2,6 @@
     <string name="app_name">Panic Shield</string>
     <string name="accessibility_service_description">Detects three rapid volume-up presses and locks the screen. Panic Shield does not read screen content; it only listens for the volume-up hardware key.</string>
     <string name="accessibility_service_summary">Volume up x3 → instant lock</string>
+    <string name="shortcut_short">Panic</string>
+    <string name="shortcut_long">Trigger panic now</string>
 </resources>

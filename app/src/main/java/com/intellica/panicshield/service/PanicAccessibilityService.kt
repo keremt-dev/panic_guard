@@ -127,7 +127,16 @@ class PanicAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         Log.d(TAG, "onServiceConnected; serviceInfo=${serviceInfo?.flags}")
+    }
+
+    /** Fired by an external trigger (voice / App Action / shortcut / deep link)
+     *  via [TriggerActivity]. Runs the full panic sequence regardless of the
+     *  volume-key 'enabled' flag, since the user invoked it explicitly. */
+    fun fireExternal() {
+        Log.d(TAG, "fireExternal()")
+        coordinator.fire(currentConfig)
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -163,8 +172,17 @@ class PanicAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
+        if (instance === this) instance = null
         runCatching { unregisterReceiver(screenReceiver) }
         scope.cancel()
         super.onDestroy()
+    }
+
+    companion object {
+        /** Set while the service is connected; used by TriggerActivity to fire
+         *  the panic sequence from an external (voice/shortcut) entry point. */
+        @Volatile
+        var instance: PanicAccessibilityService? = null
+            private set
     }
 }
