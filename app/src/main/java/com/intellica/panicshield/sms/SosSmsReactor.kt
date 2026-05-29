@@ -57,7 +57,10 @@ class SosSmsReactor : Service() {
         }
 
         ensureChannel()
-        promoteToForeground()
+        // Location FGS can be rejected when started from background on newer
+        // Android. If so we DON'T crash — sending an SMS needs no FGS; we just
+        // lose the fresh-GPS guarantee and fall back to last-known location.
+        val inForeground = promoteToForeground()
 
         scope.launch {
             try {
@@ -68,7 +71,7 @@ class SosSmsReactor : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "send failed", e)
             } finally {
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                if (inForeground) stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf(startId)
             }
         }
@@ -89,7 +92,9 @@ class SosSmsReactor : Service() {
         )
     }
 
-    private fun promoteToForeground() {
+    /** @return true if foreground entry succeeded; false if the OS rejected
+     *  the location FGS (we then proceed without it — SMS needs no FGS). */
+    private fun promoteToForeground(): Boolean {
         val notif: Notification = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
             .setContentTitle("Sending SOS")
             .setContentText("Acquiring location and dispatching SMS…")
@@ -97,14 +102,16 @@ class SosSmsReactor : Service() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIF_ID,
-                notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-            )
-        } else {
-            startForeground(NOTIF_ID, notif)
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground(location) rejected", e)
+            false
         }
     }
 

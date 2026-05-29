@@ -61,7 +61,15 @@ class FaceCaptureService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         ensureChannel()
-        promoteToForeground()
+        // Android 14+ blocks starting a camera-type FGS from the background
+        // (anti-spyware). startForeground() then throws SecurityException
+        // INSIDE this callback, which would crash the whole process — taking
+        // down the AccessibilityService with it. Guard it and bail cleanly.
+        if (!promoteToForeground()) {
+            Log.w(TAG, "could not enter camera foreground; aborting capture")
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         startCamera()
         mainHandler.postDelayed({ finish("timeout") }, WINDOW_MS)
         return START_NOT_STICKY
@@ -79,17 +87,25 @@ class FaceCaptureService : LifecycleService() {
         )
     }
 
-    private fun promoteToForeground() {
+    /** @return true if we successfully entered the foreground; false if the
+     *  OS rejected the camera FGS (e.g. background start on API 34+). */
+    private fun promoteToForeground(): Boolean {
         val notif: Notification = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
             .setContentTitle("Panic Shield")
             .setContentText("Securing evidence…")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setOngoing(true)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
-        } else {
-            startForeground(NOTIF_ID, notif)
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground(camera) rejected", e)
+            false
         }
     }
 
