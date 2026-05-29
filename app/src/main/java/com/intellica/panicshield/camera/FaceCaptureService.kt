@@ -148,14 +148,17 @@ class FaceCaptureService : LifecycleService() {
             proxy.close()
             return
         }
-        val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
+        val rotation = proxy.imageInfo.rotationDegrees
+        val input = InputImage.fromMediaImage(mediaImage, rotation)
         faceDetector.process(input)
             .addOnSuccessListener { faces ->
+                Log.d(TAG, "frame ${input.width}x${input.height} rot=$rotation faces=${faces.size}")
                 if (faces.isNotEmpty() && !captured.get()) {
                     Log.d(TAG, "face detected (${faces.size}); capturing")
                     takePhoto()
                 }
             }
+            .addOnFailureListener { Log.e(TAG, "face process failed", it) }
             .addOnCompleteListener { proxy.close() }
     }
 
