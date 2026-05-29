@@ -26,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.Locale
 import kotlin.coroutines.resume
 
 private const val TAG = "SosSms"
@@ -173,8 +174,11 @@ class SosSmsReactor : Service() {
 
         fun composeBody(location: Location?): String {
             val coordsPart = if (location != null) {
-                val lat = "%.6f".format(location.latitude)
-                val lng = "%.6f".format(location.longitude)
+                // Force Locale.US: on a Turkish (or any comma-decimal) locale the
+                // default formatter emits "41,0082" and the maps URL
+                // ?q=41,0082,28,9784 is unparseable ("no result found").
+                val lat = String.format(Locale.US, "%.6f", location.latitude)
+                val lng = String.format(Locale.US, "%.6f", location.longitude)
                 "Konum: https://maps.google.com/?q=$lat,$lng"
             } else {
                 "Konum alınamadı."
