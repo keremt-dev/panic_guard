@@ -32,7 +32,19 @@ class PanicCoordinator(
     private val scope = CoroutineScope(Dispatchers.Default)
     private val appContext: Context = service.applicationContext
 
+    @Volatile private var lastFireMs: Long = 0L
+
     fun fire(config: TriggerConfig) {
+        // Cooldown across ALL trigger sources (shake/volume/broadcast/voice):
+        // a vigorous shake or key mash can fire several times in a second, and
+        // without this each repeat would send another SOS SMS + capture. One
+        // panic per cooldown window.
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFireMs < FIRE_COOLDOWN_MS) {
+            Log.d(TAG, "ignored duplicate fire (cooldown)")
+            return
+        }
+        lastFireMs = now
         Log.d(TAG, "fire()")
 
         // 1. Mark panic ACTIVE (durable flag observed by BankBlocker + UI)
@@ -80,5 +92,6 @@ class PanicCoordinator(
 
     private companion object {
         const val TAG = "PanicCoord"
+        const val FIRE_COOLDOWN_MS = 8_000L
     }
 }

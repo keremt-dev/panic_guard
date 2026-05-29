@@ -5,10 +5,16 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import kotlin.math.sqrt
 import com.intellica.panicshield.block.BankBlocker
 import com.intellica.panicshield.block.ProtectedAppsRepository
 import com.intellica.panicshield.camera.FaceCaptureService
@@ -51,6 +57,27 @@ class PanicAccessibilityService : AccessibilityService() {
     private var lastBlockedPkg: String? = null
     private var lastBlockAtMs: Long = 0L
 
+    // Shake-to-trigger (screen-on only; normal accelerometer stops delivering
+    // when the CPU sleeps). Registered/unregistered as the setting toggles.
+    private val sensorManager by lazy { getSystemService(SENSOR_SERVICE) as? SensorManager }
+    private var shakeRegistered = false
+    private var shakeDetector: ShakeDetector? = null
+    private val shakeListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            val d = shakeDetector ?: return
+            val gForce = sqrt(
+                event.values[0] * event.values[0] +
+                    event.values[1] * event.values[1] +
+                    event.values[2] * event.values[2]
+            ) / SensorManager.GRAVITY_EARTH
+            if (d.onSample(gForce, SystemClock.elapsedRealtime())) {
+                Log.d(TAG, "shake detected -> fireExternal")
+                fireExternal()
+            }
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
     /**
      * Fires whenever the screen wakes or the keyguard is dismissed. While panic
      * is active this is exactly when the attacker's face is in front of the
@@ -91,6 +118,14 @@ class PanicAccessibilityService : AccessibilityService() {
 
         protectedApps.protectedPackages
             .onEach { protectedPackages = it }
+            .launchIn(scope)
+
+        // Combine shake enabled + sensitivity into (re)registration.
+        kotlinx.coroutines.flow.combine(
+            settings.shakeEnabled,
+            settings.shakeSensitivity,
+        ) { enabled, sensitivity -> enabled to sensitivity }
+            .onEach { (enabled, sensitivity) -> applyShakeConfig(enabled, sensitivity) }
             .launchIn(scope)
 
         settings.captureOnTrigger
@@ -139,6 +174,38 @@ class PanicAccessibilityService : AccessibilityService() {
         coordinator.fire(currentConfig)
     }
 
+    private fun applyShakeConfig(enabled: Boolean, sensitivity: Int) {
+        if (enabled) {
+            // sensitivity 1 (hardest) .. 5 (easiest) -> g threshold 3.3 .. 2.3
+            val threshold = 3.3f - (sensitivity - 1) * 0.25f
+            shakeDetector = ShakeDetector(
+                gThreshold = threshold,
+                requiredShakes = 3,
+                windowMs = 1500L,
+            )
+            registerShake()
+        } else {
+            unregisterShake()
+            shakeDetector = null
+        }
+    }
+
+    private fun registerShake() {
+        if (shakeRegistered) return
+        val sm = sensorManager ?: return
+        val accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+        sm.registerListener(shakeListener, accel, SensorManager.SENSOR_DELAY_GAME)
+        shakeRegistered = true
+        Log.d(TAG, "shake listener registered")
+    }
+
+    private fun unregisterShake() {
+        if (!shakeRegistered) return
+        sensorManager?.unregisterListener(shakeListener)
+        shakeRegistered = false
+        Log.d(TAG, "shake listener unregistered")
+    }
+
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (!currentConfig.enabled) return false
         if (event.action != KeyEvent.ACTION_DOWN) return false
@@ -157,6 +224,9 @@ class PanicAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString()
+        if (panicActive) {
+            Log.d(TAG, "windowState pkg=$pkg inSet=${pkg in protectedPackages}")
+        }
         val blocker = BankBlocker(protectedPackages = protectedPackages, panicActive = panicActive)
         if (!blocker.shouldBlock(pkg)) return
 
@@ -173,6 +243,7 @@ class PanicAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
         if (instance === this) instance = null
+        unregisterShake()
         runCatching { unregisterReceiver(screenReceiver) }
         scope.cancel()
         super.onDestroy()

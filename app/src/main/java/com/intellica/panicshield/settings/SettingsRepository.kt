@@ -38,6 +38,14 @@ class SettingsRepository(private val context: Context) {
     /** PBKDF2 hash of the safe PIN (null if the user hasn't set one yet). */
     val safePinHash: Flow<String?> = context.dataStore.data.map { it[SAFE_PIN_HASH] }
 
+    /** Shake-to-trigger (screen-on). Default off to avoid accidental SOS. */
+    val shakeEnabled: Flow<Boolean> = context.dataStore.data.map { it[SHAKE_ENABLED] ?: false }
+
+    /** Shake sensitivity 1 (hardest) .. 5 (easiest). Default 3. */
+    val shakeSensitivity: Flow<Int> = context.dataStore.data.map {
+        (it[SHAKE_SENSITIVITY] ?: 3).coerceIn(1, 5)
+    }
+
     suspend fun update(transform: (TriggerConfig) -> TriggerConfig) {
         context.dataStore.edit { prefs ->
             val current = TriggerConfig(
@@ -68,6 +76,14 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setShakeEnabled(value: Boolean) {
+        context.dataStore.edit { it[SHAKE_ENABLED] = value }
+    }
+
+    suspend fun setShakeSensitivity(value: Int) {
+        context.dataStore.edit { it[SHAKE_SENSITIVITY] = value.coerceIn(1, 5) }
+    }
+
     suspend fun setEmergencyContact(contact: EmergencyContact?) {
         context.dataStore.edit { prefs ->
             if (contact == null) {
@@ -90,5 +106,7 @@ class SettingsRepository(private val context: Context) {
         val EMERGENCY_CONTACT_E164 = stringPreferencesKey("emergency_contact_e164")
         val CAPTURE_ON_TRIGGER = booleanPreferencesKey("capture_on_trigger")
         val SAFE_PIN_HASH = stringPreferencesKey("safe_pin_hash")
+        val SHAKE_ENABLED = booleanPreferencesKey("shake_enabled")
+        val SHAKE_SENSITIVITY = intPreferencesKey("shake_sensitivity")
     }
 }

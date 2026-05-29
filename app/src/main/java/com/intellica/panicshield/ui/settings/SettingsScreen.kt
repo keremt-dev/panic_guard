@@ -69,6 +69,8 @@ fun SettingsScreen(
     val config by viewModel.config.collectAsState()
     val emergency by viewModel.emergencyContact.collectAsState()
     val captureOn by viewModel.captureOnTrigger.collectAsState()
+    val shakeOn by viewModel.shakeEnabled.collectAsState()
+    val shakeSensitivity by viewModel.shakeSensitivity.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -148,6 +150,29 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Vibrate on trigger", modifier = Modifier.weight(1f))
                 Switch(checked = config.vibrate, onCheckedChange = viewModel::setVibrate)
+            }
+
+            HorizontalDivider()
+
+            Text("Shake to trigger", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Shake the phone to fire panic")
+                    Text(
+                        "Works while the screen is on. Higher sensitivity may cause accidental triggers in a pocket or bag.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(checked = shakeOn, onCheckedChange = viewModel::setShakeEnabled)
+            }
+            if (shakeOn) {
+                Text("Sensitivity: $shakeSensitivity / 5")
+                Slider(
+                    value = shakeSensitivity.toFloat(),
+                    onValueChange = { viewModel.setShakeSensitivity(it.toInt()) },
+                    valueRange = 1f..5f,
+                    steps = 3,
+                )
             }
 
             HorizontalDivider()

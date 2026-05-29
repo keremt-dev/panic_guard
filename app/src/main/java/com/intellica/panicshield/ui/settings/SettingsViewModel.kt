@@ -42,6 +42,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         initialValue = true,
     )
 
+    val shakeEnabled: StateFlow<Boolean> = repo.shakeEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = false,
+    )
+
+    val shakeSensitivity: StateFlow<Int> = repo.shakeSensitivity.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = 3,
+    )
+
+    fun setShakeEnabled(value: Boolean) {
+        viewModelScope.launch { repo.setShakeEnabled(value) }
+    }
+
+    fun setShakeSensitivity(value: Int) {
+        viewModelScope.launch { repo.setShakeSensitivity(value) }
+    }
+
     private val filesDir = application.filesDir
     private val _photos = MutableStateFlow<List<CapturedPhoto>>(emptyList())
     val photos: StateFlow<List<CapturedPhoto>> = _photos.asStateFlow()
