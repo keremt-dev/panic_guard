@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.intellica.panicshield.settings.TriggerConfig
 import com.intellica.panicshield.ui.photos.CapturedPhotosScreen
+import com.intellica.panicshield.ui.protected.ProtectedAppsScreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +55,11 @@ fun SettingsScreen(
     var showPhotos by remember { mutableStateOf(false) }
     if (showPhotos) {
         CapturedPhotosScreen(viewModel = viewModel, onBack = { showPhotos = false })
+        return
+    }
+    var showProtected by remember { mutableStateOf(false) }
+    if (showProtected) {
+        ProtectedAppsScreen(onBack = { showProtected = false })
         return
     }
 
@@ -181,6 +187,20 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Captured photos")
+            }
+
+            HorizontalDivider()
+
+            Text("Protected apps", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Apps gated while panic is active — opened ones are kicked back to home.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { showProtected = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Manage protected apps")
             }
         }
     }
